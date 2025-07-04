@@ -180,7 +180,7 @@ if __name__ == "__main__":
         print(f"Error: Submission file '{submission_file}' not found!")
         exit(1)
 
-    print("Starting Excel data copy with connection refresh...")k
+    print("Starting Excel data copy with connection refresh...")
     print("Using openpyxl method (preserves formatting)")
 
     # Execute the copy process with connection refresh
