@@ -5,6 +5,11 @@ import os
 import warnings
 import win32com.client as win32
 import time
+from datetime import datetime
+import smtplib
+from email.message import EmailMessage
+import mimetypes
+
 
 # Suppress all Excel-related warnings for automated processing
 warnings.filterwarnings('ignore', category=UserWarning, module='openpyxl')
@@ -164,12 +169,84 @@ def copy_data_between_files(source_file, submission_file, output_file, refresh_c
     except Exception as e:
         print(f"Error occurred: {e}")
 
+def send_email_smtp(sender_email, sender_password, to, cc, subject, body, attachment_path, smtp_server, smtp_port):
+    """
+    Sends an email with attachment using SMTP (TLS or SSL).
+    """
+    msg = EmailMessage()
+    msg['From'] = sender_email
+    msg['To'] = to
+    msg['cc'] = cc
+    msg['Subject'] = subject
+    msg.set_content(body)
+
+    # Add attachment
+    if os.path.exists(attachment_path):
+        mime_type, _ = mimetypes.guess_type(attachment_path)
+        mime_type, mime_subtype = mime_type.split('/') if mime_type else ('application', 'octet-stream')
+
+        with open(attachment_path, 'rb') as file:
+            msg.add_attachment(
+                file.read(),
+                maintype=mime_type,
+                subtype=mime_subtype,
+                filename=os.path.basename(attachment_path)
+            )
+        print(f"📎 Attached file: {attachment_path}")
+    else:
+        print(f"⚠ Attachment not found: {attachment_path}")
+        return
+
+    # Send email
+    try:
+        with smtplib.SMTP(smtp_server, smtp_port) as smtp:
+            smtp.starttls()  # Secure the connection
+            smtp.login(sender_email, sender_password)
+            smtp.send_message(msg)
+        print("📧 Email sent successfully via SMTP.")
+    except Exception as e:
+        print(f"❌ Failed to send email: {e}")
+
+
+def open_and_resave_excel(file_path):
+    if not os.path.exists(file_path):
+        print(f"❌ File not found: {file_path}")
+        return False
+
+    try:
+        excel_app = win32.gencache.EnsureDispatch("Excel.Application")
+        excel_app.Visible = False
+        excel_app.DisplayAlerts = False
+
+        print(f"📂 Opening workbook: {file_path}")
+        workbook = excel_app.Workbooks.Open(file_path)
+
+        # Save to a new file
+        new_path = file_path.replace(".xlsx", "_cleaned.xlsx")
+        workbook.SaveAs(new_path)
+        workbook.Close(SaveChanges=False)
+        excel_app.Quit()
+
+        print(f"✅ File saved cleanly as: {new_path}")
+        return True
+
+    except Exception as e:
+        print(f"❌ Error while processing file: {e}")
+        try:
+            if 'workbook' in locals():
+                workbook.Close(SaveChanges=False)
+            if 'excel_app' in locals():
+                excel_app.Quit()
+        except:
+            pass
+        return False
+
 
 if __name__ == "__main__":
     # File paths - update these with your actual file paths
-    source_file = r"\_internal\M-Einvoice\exportM.xlsm"  # Source file
-    submission_file = r"\_internal\M-Einvoice\BatchSubmission-v2.xlsx"  # Submission file
-    output_file = r"\_internal\M-Einvoice\BatchSubmission-Combined.xlsx"  # New output file
+    source_file = os.path.abspath(r"_internal\M-Einvoice\exportM2.xlsx")  # Source file
+    submission_file = r"_internal\M-Einvoice\BatchSubmission-v2.xlsx"  # Submission file
+    output_file = f"_internal\\M-Einvoice\\E Invoice {datetime.today().strftime('%Y-%m-%d')}.xlsx"  # New output file
 
     # Check if files exist
     if not os.path.exists(source_file):
@@ -185,3 +262,27 @@ if __name__ == "__main__":
 
     # Execute the copy process with connection refresh
     copy_data_between_files(source_file, submission_file, output_file, refresh_connections=True)
+    #open_and_resave_excel(f"_internal\\M-Einvoice\\E Invoice {datetime.today().strftime('%Y-%m-%d')}.xlsx")
+
+    # Email config
+    sender_email = "admin1@lshworld.com"
+    sender_password = "dpvqmxwsrxvxmbvr"
+    recipient = "carene_my@lshworld.com"
+    cc = "sales_my@lshworld.com"
+    subject = f"E-Invoice Date {datetime.today().strftime('%Y-%m-%d')}"
+    body = "Hi,\n\nPlease find the attached combined submission Excel file.\n\nRegards,\nAutomation Script"
+    smtp_server = "smtp.office365.com"  # or smtp.gmail.com or your mail server
+    smtp_port = 587
+
+    '''send_email_smtp(
+            sender_email,
+            sender_password,
+            recipient,
+            cc,
+            subject,
+            body,
+            output_file,
+            smtp_server,
+            smtp_port
+        )'''
+
